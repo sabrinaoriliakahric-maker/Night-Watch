@@ -135,7 +135,8 @@ public class SeedManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Abilita/disabilita interazione semi (collider e script)
+    /// Abilita/disabilita interazione semi
+    /// FIX: Ora disabilita SOLO il collider, non lo script Seed.cs
     /// </summary>
     private void EnableSeedInteraction(bool enable)
     {
@@ -143,13 +144,14 @@ public class SeedManager : MonoBehaviour
         {
             if (seed != null)
             {
+                // Disabilita il collider per impedire il raycast (e quindi l'interazione)
                 Collider col = seed.GetComponent<Collider>();
                 if (col != null)
                     col.enabled = enable;
 
-                MonoBehaviour[] scripts = seed.GetComponents<MonoBehaviour>();
-                foreach (var script in scripts)
-                    script.enabled = enable;
+                // NON disabilitiamo piu' lo script Seed.cs!
+                // Il collider disabilitato impedisce gia' il raycast, quindi niente interazione di notte
+                // E piu' importante: non disabilitando piu' lo script, il metodo Interact() funzionera' sempre correttamente
             }
         }
     }
