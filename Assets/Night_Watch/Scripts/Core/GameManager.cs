@@ -1,95 +1,122 @@
 using UnityEngine;
 
-public enum GamePhase
+public enum GameState
 {
-    Day,
-    Night
+    Gameplay,
+    Pausa,
+    GameOver
 }
 
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance;
 
-    public GamePhase CurrentPhase = GamePhase.Day;
-    public float phaseDuration = 20f; // secondi per fase
+    [Header("Riferimento al DayNightCycle")]
+    public DayNightCycle dayNightCycle;
 
-    private float phaseTimer;
+    [Header("Stato iniziale")]
+    public GameState currentState = GameState.Gameplay;
 
-    [Header("Riferimenti")]
-    public SeedManager seedManager;
-    public Light directionalLight;
+    private float savedPhaseTimer;
+    private GameState previousState;
 
     private void Awake()
     {
         if (Instance == null)
-        {
             Instance = this;
-        }
         else
-        {
             Destroy(gameObject);
-        }
     }
 
     private void Start()
     {
-        phaseTimer = phaseDuration;
-        UpdateLighting();
+        previousState = currentState;
 
-        // Spawn semi iniziali solo se è giorno
-        if (CurrentPhase == GamePhase.Day && seedManager != null)
+        if (currentState == GameState.Gameplay && dayNightCycle != null)
         {
-            seedManager.SpawnSeeds();
+            dayNightCycle.enabled = true;
+            SeedManager.Instance?.SpawnSeeds(); // spawn semi all'avvio
         }
     }
 
     private void Update()
     {
-        phaseTimer -= Time.deltaTime;
+        HandleInput();
+        UpdateGameState();
+    }
 
-        if (phaseTimer <= 0)
+    private void HandleInput()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            SwitchPhase();
-            phaseTimer = phaseDuration;
+            if (currentState == GameState.Gameplay)
+                SetGameState(GameState.Pausa);
+            else if (currentState == GameState.Pausa)
+                SetGameState(GameState.Gameplay);
+        }
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            if (currentState == GameState.GameOver)
+                SetGameState(GameState.Gameplay);
         }
     }
 
-    private void SwitchPhase()
+    private void UpdateGameState()
     {
-        if (CurrentPhase == GamePhase.Day)
-        {
-            CurrentPhase = GamePhase.Night;
-            Debug.Log("Fase: Notte → Pianta i fiori con i semi raccolti");
-        }
-        else
-        {
-            CurrentPhase = GamePhase.Day;
-            Debug.Log("Fase: Giorno → Spawn semi per raccogliere");
+        if (dayNightCycle == null) return;
 
-            // spawn nuovi semi di giorno
-            if (seedManager != null)
-            {
-                seedManager.SpawnSeeds();
-            }
-        }
+        switch (currentState)
+        {
+            case GameState.Gameplay:
+                // ✅ abilita il ciclo giorno/notte senza resettare il timer
+                dayNightCycle.enabled = true;
+                break;
 
-        UpdateLighting();
+            case GameState.Pausa:
+                // salva il timer corrente e disabilita il ciclo
+                savedPhaseTimer = GetPhaseTimer();
+                dayNightCycle.enabled = false;
+                break;
+
+            case GameState.GameOver:
+                dayNightCycle.enabled = false;
+                dayNightCycle.CurrentPhase = NightWatchPhase.Day;
+                SetPhaseTimer(dayNightCycle.dayDuration);
+                dayNightCycle.GetType().GetMethod("UpdateLighting",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.Invoke(dayNightCycle, null);
+
+                // reset semi
+                SeedManager.Instance?.ClearAllSeeds();
+                break;
+        }
     }
 
-    private void UpdateLighting()
+    private void SetGameState(GameState newState)
     {
-        if (directionalLight != null)
+        previousState = currentState;
+        currentState = newState;
+        Debug.Log("Stato di gioco: " + currentState);
+
+        // SPAWN semi solo se entri in Gameplay da GameOver o all'avvio
+        if (currentState == GameState.Gameplay && previousState != GameState.Pausa)
         {
-            if (CurrentPhase == GamePhase.Day)
-            {
-                directionalLight.color = Color.white;
-                directionalLight.intensity = 1f;
-            }
-            else
-            {
-                directionalLight.color = Color.blue;
-                directionalLight.intensity = 0.4f;
-            }
+            SeedManager.Instance?.SpawnSeeds();
         }
+    }
+
+    private float GetPhaseTimer()
+    {
+        var field = dayNightCycle.GetType().GetField("phaseTimer",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return field != null ? (float)field.GetValue(dayNightCycle) : 0f;
+    }
+
+    private void SetPhaseTimer(float value)
+    {
+        var field = dayNightCycle.GetType().GetField("phaseTimer",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (field != null)
+            field.SetValue(dayNightCycle, value);
     }
 }

@@ -1,4 +1,3 @@
-// Assets/Night_Watch/Scripts/Core/DayNightCycle.cs
 using UnityEngine;
 
 public class DayNightCycle : MonoBehaviour
@@ -15,21 +14,28 @@ public class DayNightCycle : MonoBehaviour
     public float dayIntensity = 1f;
     public float nightIntensity = 0.4f;
 
+    [Header("Luce da controllare")]
+    public Light sceneLight;
+
     [HideInInspector] public NightWatchPhase CurrentPhase = NightWatchPhase.Day;
 
     private float phaseTimer;
 
     private void Start()
     {
-        phaseTimer = dayDuration;
-        UpdateLighting();
+        if (sceneLight == null)
+        {
+            Debug.LogWarning("DayNightCycle: nessuna luce assegnata!");
+        }
+
+        StartDay(); // Avvia sempre la fase di giorno all'inizio
     }
 
     private void Update()
     {
         phaseTimer -= Time.deltaTime;
 
-        if (phaseTimer <= 0)
+        if (phaseTimer <= 0f)
         {
             SwitchPhase();
         }
@@ -39,29 +45,41 @@ public class DayNightCycle : MonoBehaviour
     {
         if (CurrentPhase == NightWatchPhase.Day)
         {
-            CurrentPhase = NightWatchPhase.Night;
-            phaseTimer = nightDuration;
+            StartNight();
         }
         else
         {
-            CurrentPhase = NightWatchPhase.Day;
-            phaseTimer = dayDuration;
+            StartDay();
         }
+    }
 
+    private void StartDay()
+    {
+        CurrentPhase = NightWatchPhase.Day;
+        phaseTimer = dayDuration; // usa il valore dall’Inspector
+        UpdateLighting();
+    }
+
+    private void StartNight()
+    {
+        CurrentPhase = NightWatchPhase.Night;
+        phaseTimer = nightDuration; // usa il valore dall’Inspector
         UpdateLighting();
     }
 
     private void UpdateLighting()
     {
+        if (sceneLight == null) return;
+
         if (CurrentPhase == NightWatchPhase.Day)
         {
-            GetComponent<Light>().color = dayColor;
-            GetComponent<Light>().intensity = dayIntensity;
+            sceneLight.color = dayColor;
+            sceneLight.intensity = dayIntensity;
         }
         else
         {
-            GetComponent<Light>().color = nightColor;
-            GetComponent<Light>().intensity = nightIntensity;
+            sceneLight.color = nightColor;
+            sceneLight.intensity = nightIntensity;
         }
     }
 }

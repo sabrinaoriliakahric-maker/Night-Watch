@@ -7,61 +7,110 @@ public class PlayerController : MonoBehaviour
     public float interactRange = 2f;
 
     private Rigidbody rb;
-    public Transform cameraTransform; // collega qui la Main Camera
+
+    [Header("Camera")]
+    public Transform cameraTransform; // collega la Main Camera
+
+    private IInteractable currentInteractable;
 
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
+
         if (cameraTransform == null && Camera.main != null)
-        {
             cameraTransform = Camera.main.transform;
-        }
     }
 
     private void Update()
     {
-        Move();
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            TryInteract();
-        }
+        HandleMovement();
+        HandleInteraction();
     }
 
-    private void Move()
+    // ==========================
+    // MOVIMENTO
+    // ==========================
+    private void HandleMovement()
     {
-        float h = Input.GetAxis("Horizontal"); // A/D
-        float v = Input.GetAxis("Vertical");   // W/S
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
 
-        // direzione relativa alla camera
+        if (cameraTransform == null) return;
+
         Vector3 forward = cameraTransform.forward;
         Vector3 right = cameraTransform.right;
 
-        // ignora la componente verticale della camera
         forward.y = 0f;
         right.y = 0f;
+
         forward.Normalize();
         right.Normalize();
 
-        Vector3 moveDir = (forward * v) + (right * h);
+        Vector3 moveDir = forward * v + right * h;
 
-        if (moveDir.magnitude >= 0.1f)
+        Vector3 velocity = moveDir * moveSpeed;
+        velocity.y = rb.linearVelocity.y;
+
+        rb.linearVelocity = velocity;
+    }
+
+    // ==========================
+    // INTERAZIONE (SPACE)
+    // ==========================
+    private void HandleInteraction()
+    {
+        FindInteractable();
+
+        if (Input.GetKeyDown(KeyCode.Space) && currentInteractable != null)
         {
-            rb.MovePosition(transform.position + (moveDir * moveSpeed * Time.deltaTime));
-            transform.forward = moveDir; // player guarda dove si muove
+            if (GameManager.Instance != null &&
+                GameManager.Instance.dayNightCycle != null)
+            {
+                // Se è giorno, raccogli semi
+                if (GameManager.Instance.dayNightCycle.CurrentPhase == NightWatchPhase.Day)
+                {
+                    // Ricerca diretta del seme tramite Raycast
+                    Ray ray = new Ray(transform.position + Vector3.up, transform.forward);
+                    if (Physics.Raycast(ray, out RaycastHit hit, interactRange))
+                    {
+                        // Verifica se l'oggetto è un seme (tramite tag o nome)
+                        if (hit.collider.CompareTag("Seed"))
+                        {
+                            SeedManager.Instance.CollectSeed(hit.collider.gameObject);
+                        }
+                    }
+                }
+                // Se è notte, pianta fiori
+                else if (GameManager.Instance.dayNightCycle.CurrentPhase == NightWatchPhase.Night)
+                {
+                    currentInteractable.Interact();
+                }
+            }
         }
     }
 
-    private void TryInteract()
+    // ==========================
+    // RILEVA OGGETTI
+    // ==========================
+    private void FindInteractable()
     {
-        Collider[] hits = Physics.OverlapSphere(transform.position, interactRange);
-        foreach (Collider hit in hits)
+        currentInteractable = null;
+
+        Ray ray = new Ray(transform.position + Vector3.up, transform.forward);
+        if (Physics.Raycast(ray, out RaycastHit hit, interactRange))
         {
-            IInteractable interactable = hit.GetComponent<IInteractable>();
+            IInteractable interactable = hit.collider.GetComponent<IInteractable>();
             if (interactable != null)
-            {
-                interactable.Interact();
-                break;
-            }
+                currentInteractable = interactable;
         }
+    }
+
+    // ==========================
+    // DEBUG VISIVO
+    // ==========================
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawRay(transform.position + Vector3.up, transform.forward * interactRange);
     }
 }
