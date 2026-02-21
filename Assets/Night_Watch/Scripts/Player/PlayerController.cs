@@ -59,30 +59,28 @@ public class PlayerController : MonoBehaviour
     // ==========================
     private void HandleInteraction()
     {
+        // Trova l'oggetto interagibile davanti al player
         FindInteractable();
 
+        // Se preme SPACE e c'è qualcosa di interagibile
         if (Input.GetKeyDown(KeyCode.Space) && currentInteractable != null)
         {
+            // Controlla che il gioco sia in uno stato valido
             if (GameManager.Instance != null &&
                 GameManager.Instance.dayNightCycle != null)
             {
-                // Se è giorno, raccogli semi
-                if (GameManager.Instance.dayNightCycle.CurrentPhase == NightWatchPhase.Day)
+                NightWatchPhase phase = GameManager.Instance.dayNightCycle.CurrentPhase;
+
+                // Se è giorno, permetti interazione con semi
+                if (phase == NightWatchPhase.Day)
                 {
-                    // Ricerca diretta del seme tramite Raycast
-                    Ray ray = new Ray(transform.position + Vector3.up, transform.forward);
-                    if (Physics.Raycast(ray, out RaycastHit hit, interactRange))
-                    {
-                        // Verifica se l'oggetto è un seme (tramite tag o nome)
-                        if (hit.collider.CompareTag("Seed"))
-                        {
-                            SeedManager.Instance.CollectSeed(hit.collider.gameObject);
-                        }
-                    }
+                    // Chiama l'interazione sull'oggetto (funziona per semi e planting zone)
+                    currentInteractable.Interact();
                 }
-                // Se è notte, pianta fiori
-                else if (GameManager.Instance.dayNightCycle.CurrentPhase == NightWatchPhase.Night)
+                // Se è notte, permetti interazione solo con PlantingZone
+                else if (phase == NightWatchPhase.Night)
                 {
+                    // Chiama l'interazione (PlantingZone.Interact() gestisce la logica)
                     currentInteractable.Interact();
                 }
             }
@@ -97,11 +95,25 @@ public class PlayerController : MonoBehaviour
         currentInteractable = null;
 
         Ray ray = new Ray(transform.position + Vector3.up, transform.forward);
+        
+        // Debug: visualizza il raycast nell'editor
+        Debug.DrawRay(transform.position + Vector3.up, transform.forward * interactRange, Color.red, 0.1f);
+        
         if (Physics.Raycast(ray, out RaycastHit hit, interactRange))
         {
+            // Debug: mostra cosa ha colpito
+            Debug.Log($"Player vede: {hit.collider.gameObject.name} (tag: {hit.collider.tag})");
+            
             IInteractable interactable = hit.collider.GetComponent<IInteractable>();
             if (interactable != null)
+            {
                 currentInteractable = interactable;
+                Debug.Log($"Oggetto interagibile trovato: {hit.collider.gameObject.name}");
+            }
+            else
+            {
+                Debug.Log($"L'oggetto {hit.collider.gameObject.name} non ha IInteractable!");
+            }
         }
     }
 

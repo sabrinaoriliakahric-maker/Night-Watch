@@ -20,6 +20,9 @@ public class SeedManager : MonoBehaviour
     [Header("Area di spawn dei semi")]
     public BoxCollider seedSpawnArea;
 
+    [Header("Effetto particellare quando spawna un seme")]
+    public GameObject spawnVFXPrefab;
+
     // Lista dei semi attualmente presenti
     private List<GameObject> spawnedSeeds = new List<GameObject>();
 
@@ -33,6 +36,9 @@ public class SeedManager : MonoBehaviour
     public List<GameObject> SpawnedSeeds => spawnedSeeds;
 
     private bool isSpawningActive = false;
+    
+    // Track della fase precedente per rilevare il cambio
+    private NightWatchPhase previousPhase = NightWatchPhase.Day;
 
     private void Awake()
     {
@@ -42,15 +48,50 @@ public class SeedManager : MonoBehaviour
             Destroy(gameObject);
     }
 
+    private void Start()
+    {
+        if (GameManager.Instance != null && GameManager.Instance.dayNightCycle != null)
+        {
+            previousPhase = GameManager.Instance.dayNightCycle.CurrentPhase;
+        }
+    }
+
     private void Update()
     {
-        if (!isSpawningActive) return;
+        if (GameManager.Instance == null || GameManager.Instance.dayNightCycle == null)
+            return;
+
+        NightWatchPhase currentPhase = GameManager.Instance.dayNightCycle.CurrentPhase;
+
+        // Se la fase è cambiata da Day a Night, elimina i semi non raccolti
+        if (previousPhase == NightWatchPhase.Day && currentPhase == NightWatchPhase.Night)
+        {
+            OnNightStart();
+        }
 
         // Abilita/disabilita interazione dei semi in base al Day/Night
-        if (GameManager.Instance.dayNightCycle.CurrentPhase == NightWatchPhase.Day)
+        if (currentPhase == NightWatchPhase.Day)
+        {
             EnableSeedInteraction(true);
+        }
         else
+        {
             EnableSeedInteraction(false);
+        }
+
+        previousPhase = currentPhase;
+    }
+
+    /// <summary>
+    /// Called when night starts - clear uncollected seeds
+    /// </summary>
+    private void OnNightStart()
+    {
+        if (spawnedSeeds.Count > 0)
+        {
+            Debug.Log($"Notte! Eliminati {spawnedSeeds.Count} semi non raccolti.");
+            ClearAllSeeds();
+        }
     }
 
     /// <summary>
@@ -68,6 +109,12 @@ public class SeedManager : MonoBehaviour
             Vector3 spawnPos = GetSpawnPosition();
             GameObject newSeed = Instantiate(seedPrefab, spawnPos, Quaternion.identity);
             spawnedSeeds.Add(newSeed);
+            
+            // Spawn effetto particellare per ogni seme
+            if (spawnVFXPrefab != null)
+            {
+                Instantiate(spawnVFXPrefab, spawnPos, Quaternion.identity);
+            }
         }
 
         isSpawningActive = true;
