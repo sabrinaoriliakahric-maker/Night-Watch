@@ -30,13 +30,11 @@ public class SeedManager : MonoBehaviour
     private int collectedSeeds = 0;
 
     [Header("Conteggio semi raccolti dal player")]
-    public int CollectedSeeds => collectedSeeds; // solo get, nessun errore di protezione
+    public int CollectedSeeds => collectedSeeds;
 
     // Lista pubblica di sola lettura dei semi spawnati
     public List<GameObject> SpawnedSeeds => spawnedSeeds;
 
-    private bool isSpawningActive = false;
-    
     // Track della fase precedente per rilevare il cambio
     private NightWatchPhase previousPhase = NightWatchPhase.Day;
 
@@ -116,8 +114,6 @@ public class SeedManager : MonoBehaviour
                 Instantiate(spawnVFXPrefab, spawnPos, Quaternion.identity);
             }
         }
-
-        isSpawningActive = true;
     }
 
     /// <summary>
@@ -131,12 +127,10 @@ public class SeedManager : MonoBehaviour
                 Destroy(seed);
         }
         spawnedSeeds.Clear();
-        isSpawningActive = false;
     }
 
     /// <summary>
     /// Abilita/disabilita interazione semi
-    /// FIX: Ora disabilita SOLO il collider, non lo script Seed.cs
     /// </summary>
     private void EnableSeedInteraction(bool enable)
     {
@@ -148,10 +142,6 @@ public class SeedManager : MonoBehaviour
                 Collider col = seed.GetComponent<Collider>();
                 if (col != null)
                     col.enabled = enable;
-
-                // NON disabilitiamo piu' lo script Seed.cs!
-                // Il collider disabilitato impedisce gia' il raycast, quindi niente interazione di notte
-                // E piu' importante: non disabilitando piu' lo script, il metodo Interact() funzionera' sempre correttamente
             }
         }
     }

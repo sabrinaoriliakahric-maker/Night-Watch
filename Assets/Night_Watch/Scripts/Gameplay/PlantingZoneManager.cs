@@ -9,12 +9,18 @@ public class PlantingZoneManager : MonoBehaviour
     public GameObject spawnVFXPrefab;
 
     [Header("Numero di zone da attivare")]
-    public int numberOfZones = 3;
+    public int numberOfZones = 5;
+    
+    [Header("Offset altezza delle zone sopra il terreno")]
+    public float zoneHeight = 0.1f;
+    
+    [Header("Layer del terreno per il Raycast")]
+    public LayerMask groundLayer = ~0;
     
     // Riferimento all'area di spawn
     private BoxCollider seedSpawnArea => SeedManager.Instance?.seedSpawnArea;
 
-    // Lista delle zone attive (riferimenti ai componenti PlantingZone)
+    // Lista delle zone attive
     private List<PlantingZone> activeZones = new List<PlantingZone>();
     
     // Tutte le planting zone disponibili nella scena
@@ -34,8 +40,10 @@ public class PlantingZoneManager : MonoBehaviour
     private void Start()
     {
         // Trova tutte le planting zone nella scena
-        allZones = FindObjectsOfType<PlantingZone>();
+        allZones = FindObjectsByType<PlantingZone>(FindObjectsSortMode.None);
         
+        Debug.Log($"[PlantingZoneManager] Trovate {allZones?.Length ?? 0} planting zone nella scena");
+
         // Disattiva tutte all'inizio
         foreach (var zone in allZones)
         {
@@ -74,6 +82,7 @@ public class PlantingZoneManager : MonoBehaviour
     /// </summary>
     private void OnNightStart()
     {
+        Debug.Log("[PlantingZoneManager] Inizio NOTTE - attivo zone");
         ActivatePlantingZones();
     }
 
@@ -82,6 +91,7 @@ public class PlantingZoneManager : MonoBehaviour
     /// </summary>
     private void OnDayStart()
     {
+        Debug.Log("[PlantingZoneManager] Inizio GIORNO - disattivo zone");
         DeactivateAllZones();
     }
 
@@ -95,6 +105,8 @@ public class PlantingZoneManager : MonoBehaviour
             Debug.LogWarning("PlantingZoneManager: Nessuna planting zone trovata nella scena!");
             return;
         }
+
+        Debug.Log($"[PlantingZoneManager] Attivazione zone - allZones: {allZones.Length}, numberOfZones: {numberOfZones}");
 
         // Disattiva tutte prima
         foreach (var zone in allZones)
@@ -116,6 +128,8 @@ public class PlantingZoneManager : MonoBehaviour
         // Attiva solo il numero richiesto di zone
         int zonesToActivate = Mathf.Min(numberOfZones, shuffledZones.Count);
         
+        Debug.Log($"[PlantingZoneManager] Zone da attivare: {zonesToActivate}");
+        
         for (int i = 0; i < zonesToActivate; i++)
         {
             // Posiziona la zona nell'area di spawn
@@ -124,6 +138,8 @@ public class PlantingZoneManager : MonoBehaviour
             shuffledZones[i].gameObject.SetActive(true);
             activeZones.Add(shuffledZones[i]);
             
+            Debug.Log($"[PlantingZoneManager] Attivata zona {i}: {shuffledZones[i].name} alla posizione {newPos}");
+            
             // Spawna effetto particellare se assegnato
             if (spawnVFXPrefab != null)
             {
@@ -131,7 +147,7 @@ public class PlantingZoneManager : MonoBehaviour
             }
         }
 
-        Debug.Log($"Attivate {zonesToActivate} planting zones!");
+        Debug.Log($"[PlantingZoneManager] ATTIVATE {zonesToActivate} planting zones!");
     }
 
     /// <summary>
@@ -143,7 +159,7 @@ public class PlantingZoneManager : MonoBehaviour
         {
             if (zone != null)
             {
-                zone.ResetZone(); // Resetta lo stato piantato
+                zone.ResetZone();
                 zone.gameObject.SetActive(false);
             }
         }
@@ -155,14 +171,35 @@ public class PlantingZoneManager : MonoBehaviour
     /// </summary>
     private Vector3 GetRandomPositionInArea()
     {
-        Vector3 randomPoint = seedSpawnArea.center + new Vector3(
+        if (seedSpawnArea == null)
+        {
+            Debug.LogError("[PlantingZoneManager] seedSpawnArea è NULL!");
+            return Vector3.zero;
+        }
+
+        Vector3 randomOffset = new Vector3(
             Random.Range(-seedSpawnArea.size.x / 2, seedSpawnArea.size.x / 2),
-            0f, // Le zone sono a terra
+            Random.Range(-seedSpawnArea.size.y / 2, seedSpawnArea.size.y / 2),
             Random.Range(-seedSpawnArea.size.z / 2, seedSpawnArea.size.z / 2)
         );
+
+        Vector3 localPoint = seedSpawnArea.center + randomOffset;
+        Vector3 worldPos = seedSpawnArea.transform.TransformPoint(localPoint);
         
-        Vector3 worldPos = seedSpawnArea.transform.TransformPoint(randomPoint);
-        worldPos.y = 0f;
+        RaycastHit hit;
+        Vector3 rayOrigin = new Vector3(worldPos.x, 100f, worldPos.z);
+        if (Physics.Raycast(rayOrigin, Vector3.down, out hit, 200f, groundLayer, QueryTriggerInteraction.Ignore))
+        {
+            worldPos.y = hit.point.y + zoneHeight;
+        }
+        else
+        {
+            worldPos.y = seedSpawnArea.transform.position.y + zoneHeight;
+            Debug.LogWarning($"[PlantingZoneManager] Raycast non ha colpito il terreno, uso fallback Y: {worldPos.y}");
+        }
+        
+        Debug.Log($"[PlantingZoneManager] Posizione generata: {worldPos}");
+        
         return worldPos;
     }
 }

@@ -4,7 +4,11 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     public float moveSpeed = 5f;
-    public float interactRange = 2f;
+    [Header("Range interazione Semi (giorno)")]
+    public float interactRange = 1f;
+    
+    [Header("Range interazione PlantingZone (notte)")]
+    public float plantingZoneInteractRange = 3f;
 
     private Rigidbody rb;
 
@@ -52,6 +56,13 @@ public class PlayerController : MonoBehaviour
         velocity.y = rb.linearVelocity.y;
 
         rb.linearVelocity = velocity;
+
+        // Ruota il player verso la direzione di movimento (Facing Direction)
+        if (moveDir.magnitude > 0.1f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(moveDir);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, 10f * Time.deltaTime);
+        }
     }
 
     // ==========================
@@ -71,6 +82,7 @@ public class PlayerController : MonoBehaviour
         {
             Debug.Log($"[PlayerController] SPACE premuto - Fase: {phase}");
             Debug.Log($"[PlayerController] Semi raccolti: {SeedManager.Instance?.CollectedSeeds}");
+            Debug.Log($"[PlayerController] Player pos: {transform.position}");
         }
 
         // Trova l'oggetto interagibile appropriato in base alla fase
@@ -111,13 +123,16 @@ public class PlayerController : MonoBehaviour
     {
         currentInteractable = null;
 
+        // Usa il range appropriato: più grande per PlantingZone di notte, più piccolo per Seed di giorno
+        float currentRange = (typeof(T) == typeof(PlantingZone)) ? plantingZoneInteractRange : interactRange;
+        
         // Usa OverlapSphere per trovare tutti i collider vicini
-        Collider[] colliders = Physics.OverlapSphere(transform.position, interactRange);
+        Collider[] colliders = Physics.OverlapSphere(transform.position, currentRange);
 
         // DEBUG: Mostra quanti collider trova
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            Debug.Log($"[PlayerController] Trovati {colliders.Length} collider nel raggio di {interactRange}");
+            Debug.Log($"[PlayerController] Trovati {colliders.Length} collider nel raggio di {currentRange}");
         }
 
         float closestDistance = float.MaxValue;
@@ -128,12 +143,6 @@ public class PlayerController : MonoBehaviour
             // Salta il collider del player stesso
             if (col.gameObject == gameObject) continue;
 
-            // DEBUG: Mostra ogni collider trovato
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                Debug.Log($"[PlayerController] Collider trovato: {col.gameObject.name}, ha PlantingZone: {col.GetComponent<PlantingZone>() != null}");
-            }
-
             // Verifica se il componente è del tipo specificato (Seed o PlantingZone)
             T targetComponent = col.GetComponent<T>();
             if (targetComponent != null)
@@ -141,8 +150,28 @@ public class PlayerController : MonoBehaviour
                 IInteractable interactable = col.GetComponent<IInteractable>();
                 if (interactable != null)
                 {
-                    // Calcola la distanza
-                    float dist = Vector3.Distance(transform.position, col.transform.position);
+                    // Calcola la distanza 2D (ignorando Y) per le PlantingZone
+                    // Questo permette di rilevare le zone anche se sono a diverse altezze
+                    float dist;
+                    if (typeof(T) == typeof(PlantingZone))
+                    {
+                        // Distanza 2D: solo X e Z
+                        float dx = transform.position.x - col.transform.position.x;
+                        float dz = transform.position.z - col.transform.position.z;
+                        dist = Mathf.Sqrt(dx * dx + dz * dz);
+                    }
+                    else
+                    {
+                        // Distanza 3D per i Seed
+                        dist = Vector3.Distance(transform.position, col.transform.position);
+                    }
+                    
+                    // DEBUG: mostra distanza
+                    if (Input.GetKeyDown(KeyCode.Space))
+                    {
+                        bool hasPlantingZone = col.GetComponent<PlantingZone>() != null;
+                        Debug.Log($"[PlayerController] Collider: {col.gameObject.name}, PlantingZone: {hasPlantingZone}, Pos: {col.transform.position}, Distanza: {dist:F2}");
+                    }
                     
                     // Prendi il più vicino
                     if (dist < closestDistance)
@@ -166,7 +195,21 @@ public class PlayerController : MonoBehaviour
     // ==========================
     private void OnDrawGizmos()
     {
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, interactRange);
+        // Determina la fase corrente per mostrare il range corretto
+        float currentRange = interactRange;
+        
+        if (GameManager.Instance != null && 
+            GameManager.Instance.dayNightCycle != null &&
+            GameManager.Instance.dayNightCycle.CurrentPhase == NightWatchPhase.Night)
+        {
+            currentRange = plantingZoneInteractRange;
+            Gizmos.color = Color.magenta; // Magenta per notte (planting zone)
+        }
+        else
+        {
+            Gizmos.color = Color.yellow; // Giorno per seed
+        }
+        
+        Gizmos.DrawWireSphere(transform.position, currentRange);
     }
 }

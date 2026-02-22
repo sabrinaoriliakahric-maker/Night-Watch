@@ -66,7 +66,7 @@ Controllo movimento \+ input.
 
 * Clamp area di gioco
 
-* Facing direction
+* **Facing direction** ✓ (implementato con Quaternion.Slerp per rotazione fluida)
 
 * Action input (SPACE)
 

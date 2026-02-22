@@ -7,6 +7,9 @@ public class PlantingZone : MonoBehaviour, IInteractable
 
     [Header("Effetto particellare quando si pianta un fiore")]
     public GameObject plantVFXPrefab;
+    
+    [Header("Offset altezza fiore sopra la zona")]
+    public float flowerHeightOffset = 0.5f;
 
     private void Awake()
     {
@@ -38,8 +41,10 @@ public class PlantingZone : MonoBehaviour, IInteractable
         {
             planted = true;
             
-            // Spawna il fiore
-            FlowerManager.Instance?.SpawnFlower(transform.position);
+            // Spawna il fiore AL CENTRO della planting zone con offset in altezza
+            Vector3 flowerPosition = transform.position + Vector3.up * flowerHeightOffset;
+            Debug.Log($"[PlantingZone] Spawn fiore al centro: {flowerPosition} (offset Y: {flowerHeightOffset})");
+            FlowerManager.Instance?.SpawnFlower(flowerPosition);
             
             // Spawna effetto particellare se assegnato
             if (plantVFXPrefab != null)
@@ -49,8 +54,8 @@ public class PlantingZone : MonoBehaviour, IInteractable
             
             Debug.Log("Fiore piantato!");
             
-            // Disattiva la zona dopo aver piantato
-            gameObject.SetActive(false);
+            // NOTA: Il fiore resta visibile nella scena come oggetto separato.
+            // Non disattiviamo la zona così il giocatore può vedere il fiore spawnato.
         }
         else
         {
