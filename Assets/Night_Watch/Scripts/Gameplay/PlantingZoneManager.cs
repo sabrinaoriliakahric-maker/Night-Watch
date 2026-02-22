@@ -132,13 +132,51 @@ public class PlantingZoneManager : MonoBehaviour
         
         for (int i = 0; i < zonesToActivate; i++)
         {
+            PlantingZone zone = shuffledZones[i];
+            
             // Posiziona la zona nell'area di spawn
             Vector3 newPos = GetRandomPositionInArea();
-            shuffledZones[i].transform.position = newPos;
-            shuffledZones[i].gameObject.SetActive(true);
-            activeZones.Add(shuffledZones[i]);
+            zone.transform.position = newPos;
+            zone.gameObject.SetActive(true);
             
-            Debug.Log($"[PlantingZoneManager] Attivata zona {i}: {shuffledZones[i].name} alla posizione {newPos}");
+            // 【NUOVO】Forza il sync dei transform per i physics PRIMA di abilitare il collider
+            // Questo è necessario per far sì che Unity aggiorni la physics world
+            Physics.SyncTransforms();
+            
+            // 【FIX】Abilita esplicitamente il BoxCollider dopo SetActive
+            // Questo è necessario perché il collider potrebbe rimanere disabilitato
+            BoxCollider col = zone.GetComponent<BoxCollider>();
+            if (col != null)
+            {
+                // 【NUOVO】Imposta dimensioni minime se troppo piccole
+                if (col.size.x < 0.1f || col.size.y < 0.1f || col.size.z < 0.1f)
+                {
+                    col.size = new Vector3(2f, 2f, 2f);
+                    Debug.Log($"[PlantingZoneManager] ⚠️ BoxCollider troppo piccolo, ridimensionato a (2,2,2)");
+                }
+                
+                col.enabled = true;
+                Debug.Log($"[PlantingZoneManager] ✅ BoxCollider abilitato per {zone.name}, enabled={col.enabled}, isTrigger={col.isTrigger}, size={col.size}, layer={LayerMask.LayerToName(zone.gameObject.layer)}");
+            }
+            else
+            {
+                Debug.LogWarning($"[PlantingZoneManager] ⚠️ Nessun BoxCollider trovato su {zone.name}!");
+            }
+            
+            // Debug: verifica che il collider sia effettivamente rilevabile
+            Collider[] testColliders = Physics.OverlapSphere(zone.transform.position, 1f);
+            Debug.Log($"[PlantingZoneManager] Test overlap alla pos {zone.transform.position}: trovati {testColliders.Length} collider");
+            foreach (var tc in testColliders)
+            {
+                Debug.Log($"[PlantingZoneManager]   - {tc.name} (PlantingZone: {tc.GetComponent<PlantingZone>() != null})");
+            }
+            
+            // Attiva il VFX delle fiamme per rendere visibile la zona
+            zone.ActivateZoneVFX();
+            
+            activeZones.Add(zone);
+            
+            Debug.Log($"[PlantingZoneManager] Attivata zona {i}: {zone.name} alla posizione {newPos}");
             
             // Spawna effetto particellare se assegnato
             if (spawnVFXPrefab != null)
@@ -159,6 +197,8 @@ public class PlantingZoneManager : MonoBehaviour
         {
             if (zone != null)
             {
+                // Rimuovi il VFX delle fiamme prima di disattivare
+                zone.DeactivateZoneVFX();
                 zone.ResetZone();
                 zone.gameObject.SetActive(false);
             }

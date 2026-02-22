@@ -8,7 +8,7 @@ public class PlayerController : MonoBehaviour
     public float interactRange = 1f;
     
     [Header("Range interazione PlantingZone (notte)")]
-    public float plantingZoneInteractRange = 3f;
+    public float plantingZoneInteractRange = 10f;
 
     private Rigidbody rb;
 
@@ -70,6 +70,10 @@ public class PlayerController : MonoBehaviour
     // ==========================
     private void HandleInteraction()
     {
+        // Controlla SOLO quando l'utente preme SPACE
+        if (!Input.GetKeyDown(KeyCode.Space))
+            return;
+
         // Determina la fase corrente
         NightWatchPhase phase = NightWatchPhase.Day;
         if (GameManager.Instance != null && GameManager.Instance.dayNightCycle != null)
@@ -77,15 +81,12 @@ public class PlayerController : MonoBehaviour
             phase = GameManager.Instance.dayNightCycle.CurrentPhase;
         }
 
-        // DEBUG: Mostra la fase corrente
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            Debug.Log($"[PlayerController] SPACE premuto - Fase: {phase}");
-            Debug.Log($"[PlayerController] Semi raccolti: {SeedManager.Instance?.CollectedSeeds}");
-            Debug.Log($"[PlayerController] Player pos: {transform.position}");
-        }
+        Debug.Log($"[PlayerController] SPACE premuto - Fase: {phase}");
+        Debug.Log($"[PlayerController] Semi raccolti: {SeedManager.Instance?.CollectedSeeds}");
+        Debug.Log($"[PlayerController] Player pos: {transform.position}");
 
-        // Trova l'oggetto interagibile appropriato in base alla fase
+        // 【CORREZIONE】Cerca l'oggetto interagibile SOLO quando l'utente preme SPACE
+        // Questo evita che currentInteractable venga resettato tra un frame e l'altro
         if (phase == NightWatchPhase.Day)
         {
             // Di giorno: cerca solo Seed
@@ -97,14 +98,10 @@ public class PlayerController : MonoBehaviour
             FindInteractable<PlantingZone>();
         }
 
-        // DEBUG: Mostra se ha trovato qualcosa
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            Debug.Log($"[PlayerController] Trovato interactable: {currentInteractable != null}");
-        }
+        Debug.Log($"[PlayerController] Trovato interactable: {currentInteractable != null}");
 
-        // Se preme SPACE e c'è qualcosa di interagibile
-        if (Input.GetKeyDown(KeyCode.Space) && currentInteractable != null)
+        // Se c'è qualcosa di interagibile, esegui l'interazione
+        if (currentInteractable != null)
         {
             // Controlla che il gioco sia in uno stato valido
             if (GameManager.Instance != null &&
@@ -130,9 +127,23 @@ public class PlayerController : MonoBehaviour
         Collider[] colliders = Physics.OverlapSphere(transform.position, currentRange);
 
         // DEBUG: Mostra quanti collider trova
-        if (Input.GetKeyDown(KeyCode.Space))
+        bool isDebugSpace = Input.GetKeyDown(KeyCode.Space);
+        if (isDebugSpace)
         {
             Debug.Log($"[PlayerController] Trovati {colliders.Length} collider nel raggio di {currentRange}");
+            
+            // Debug: mostra tutti i collider trovati
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                GameObject obj = colliders[i].gameObject;
+                bool hasSeed = obj.GetComponent<Seed>() != null;
+                bool hasPlantingZone = obj.GetComponent<PlantingZone>() != null;
+                bool hasIInteractable = obj.GetComponent<IInteractable>() != null;
+                bool isActive = obj.activeInHierarchy;
+                bool colliderEnabled = colliders[i].enabled;
+                
+                Debug.Log($"[PlayerController] Collider[{i}]: {obj.name}, Seed:{hasSeed}, PlantingZone:{hasPlantingZone}, IInteractable:{hasIInteractable}, Active:{isActive}, ColliderEnabled:{colliderEnabled}");
+            }
         }
 
         float closestDistance = float.MaxValue;
@@ -143,8 +154,26 @@ public class PlayerController : MonoBehaviour
             // Salta il collider del player stesso
             if (col.gameObject == gameObject) continue;
 
+            // 【CORREZIONE】Se cerchiamo PlantingZone, escludi i Seed
+            if (typeof(T) == typeof(PlantingZone))
+            {
+                // Salta qualsiasi oggetto che ha il componente Seed
+                if (col.GetComponent<Seed>() != null)
+                {
+                    if (isDebugSpace)
+                        Debug.Log($"[PlayerController] SKIP Seed: {col.gameObject.name}");
+                    continue;
+                }
+            }
+
             // Verifica se il componente è del tipo specificato (Seed o PlantingZone)
             T targetComponent = col.GetComponent<T>();
+            
+            if (isDebugSpace)
+            {
+                Debug.Log($"[PlayerController] Check {col.gameObject.name}: GetComponent<{typeof(T).Name}> = {targetComponent != null}");
+            }
+            
             if (targetComponent != null)
             {
                 IInteractable interactable = col.GetComponent<IInteractable>();

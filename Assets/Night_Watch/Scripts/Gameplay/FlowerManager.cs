@@ -8,11 +8,15 @@ public class FlowerManager : MonoBehaviour
     [Header("Prefab del fiore")]
     public GameObject flowerPrefab; // Trascina il prefab del fiore in Unity
 
+    [Header("Effetto particellare quando appare un fiore")]
+    public GameObject flowerSpawnVFXPrefab;
+
     private void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
+            Debug.Log("[FlowerManager] Singleton creato");
         }
         else
         {
@@ -23,14 +27,27 @@ public class FlowerManager : MonoBehaviour
     // Funzione per spawnare un fiore in una posizione
     public void SpawnFlower(Vector3 position)
     {
+        Debug.Log($"[FlowerManager] SpawnFlower chiamato alla posizione: {position}");
+        
         if (flowerPrefab != null)
         {
-            _ = Instantiate(flowerPrefab, position, Quaternion.identity);
-            Debug.Log("Fiore spawnato!");
+            GameObject flower = Instantiate(flowerPrefab, position, Quaternion.identity);
+            Debug.Log($"[FlowerManager] Fiore istanziato: {flower.name} alla posizione: {flower.transform.position}");
+            
+            // Spawna VFX se assegnato
+            if (flowerSpawnVFXPrefab != null)
+            {
+                Instantiate(flowerSpawnVFXPrefab, position, Quaternion.identity);
+                Debug.Log($"[FlowerManager] VFX fiore spawnato");
+            }
+            else
+            {
+                Debug.LogWarning("[FlowerManager] flowerSpawnVFXPrefab NON assegnato!");
+            }
         }
         else
         {
-            Debug.LogWarning("Flower prefab non assegnato!");
+            Debug.LogError("[FlowerManager] ❌ flowerPrefab NON assegnato! Assegnalo nell'Inspector di Unity!");
         }
     }
 }
