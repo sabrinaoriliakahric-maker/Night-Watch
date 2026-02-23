@@ -67,6 +67,12 @@ public class SeedManager : MonoBehaviour
             OnNightStart();
         }
 
+        // Se la fase è cambiata da Night a Day, spawna nuovi semi
+        if (previousPhase == NightWatchPhase.Night && currentPhase == NightWatchPhase.Day)
+        {
+            SpawnSeeds();
+        }
+
         // Abilita/disabilita interazione dei semi in base al Day/Night
         if (currentPhase == NightWatchPhase.Day)
         {

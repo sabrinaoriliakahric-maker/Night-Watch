@@ -44,6 +44,11 @@ public class FlowerManager : MonoBehaviour
         {
             // Usa la rotazione passata come parametro invece di Quaternion.identity
             GameObject flower = Instantiate(flowerPrefab, position, rotation);
+            
+            // Reset della rotazione per assicurarsi che il fiore sia dritto
+            // (necessario perché Instantiate moltiplica la rotazione del prefab)
+            flower.transform.rotation = Quaternion.identity;
+            
             spawnedFlowers.Add(flower); // Aggiungi alla lista
             Debug.Log($"[FlowerManager] Fiore istanziato: {flower.name} - Totale fiori: {spawnedFlowers.Count}");
             

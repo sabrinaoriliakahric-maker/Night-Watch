@@ -154,13 +154,22 @@ public class PlantingZoneManager : MonoBehaviour
         
         Debug.Log($"[PlantingZoneManager] Zone da attivare: {zonesToActivate}");
         
+        // Lista per tracciare le posizioni delle zone attivate (per distanziarle)
+        List<Vector3> zonePositions = new List<Vector3>();
+        
         for (int i = 0; i < zonesToActivate; i++)
         {
             PlantingZone zone = shuffledZones[i];
             
-            // Posiziona la zona nell'area di spawn
-            Vector3 newPos = GetRandomPositionInArea();
+            // Posiziona la zona nell'area di spawn, distanziata dalle altre zone
+            Vector3 newPos = GetRandomPositionInArea(zonePositions);
             zone.transform.position = newPos;
+            
+            // Reset della rotazione per evitare fiori ruotati
+            zone.transform.rotation = Quaternion.identity;
+            
+            // Aggiungi la posizione alla lista per le successive zone
+            zonePositions.Add(newPos);
             zone.gameObject.SetActive(true);
             
             // Forza il sync dei transform per i physics PRIMA di abilitare il collider
@@ -249,10 +258,26 @@ public class PlantingZoneManager : MonoBehaviour
         Debug.Log("[PlantingZoneManager] Tutte le zone disattivate");
     }
 
+    [Header("Distanza minima tra le zone (metri)")]
+    public float minZoneDistance = 2f;
+
+    [Header("Tentativi massimi per trovare posizione valida")]
+    public int maxPositionAttempts = 30;
+
     /// <summary>
     /// Restituisce una posizione casuale all'interno dell'area di spawn
     /// </summary>
     private Vector3 GetRandomPositionInArea()
+    {
+        return GetRandomPositionInArea(null);
+    }
+
+    /// <summary>
+    /// Restituisce una posizione casuale all'interno dell'area di spawn, distanziata dalle posizioni esistenti
+    /// </summary>
+    /// <param name="existingPositions">Lista di posizioni da evitare (può essere null)</param>
+    /// <returns>Posizione valida o Vector3.zero se non trovata</returns>
+    private Vector3 GetRandomPositionInArea(List<Vector3> existingPositions)
     {
         if (seedSpawnArea == null)
         {
@@ -260,28 +285,69 @@ public class PlantingZoneManager : MonoBehaviour
             return Vector3.zero;
         }
 
-        Vector3 randomOffset = new Vector3(
-            Random.Range(-seedSpawnArea.size.x / 2, seedSpawnArea.size.x / 2),
-            Random.Range(-seedSpawnArea.size.y / 2, seedSpawnArea.size.y / 2),
-            Random.Range(-seedSpawnArea.size.z / 2, seedSpawnArea.size.z / 2)
-        );
+        Vector3 worldPos = Vector3.zero;
+        bool validPositionFound = false;
+        int attempts = 0;
 
-        Vector3 localPoint = seedSpawnArea.center + randomOffset;
-        Vector3 worldPos = seedSpawnArea.transform.TransformPoint(localPoint);
-        
-        RaycastHit hit;
-        Vector3 rayOrigin = new Vector3(worldPos.x, 100f, worldPos.z);
-        if (Physics.Raycast(rayOrigin, Vector3.down, out hit, 200f, groundLayer, QueryTriggerInteraction.Ignore))
+        // Prova a trovare una posizione valida per un numero massimo di tentativi
+        while (!validPositionFound && attempts < maxPositionAttempts)
         {
-            worldPos.y = hit.point.y + zoneHeight;
+            attempts++;
+
+            Vector3 randomOffset = new Vector3(
+                Random.Range(-seedSpawnArea.size.x / 2, seedSpawnArea.size.x / 2),
+                Random.Range(-seedSpawnArea.size.y / 2, seedSpawnArea.size.y / 2),
+                Random.Range(-seedSpawnArea.size.z / 2, seedSpawnArea.size.z / 2)
+            );
+
+            Vector3 localPoint = seedSpawnArea.center + randomOffset;
+            worldPos = seedSpawnArea.transform.TransformPoint(localPoint);
+            
+            RaycastHit hit;
+            Vector3 rayOrigin = new Vector3(worldPos.x, 100f, worldPos.z);
+            if (Physics.Raycast(rayOrigin, Vector3.down, out hit, 200f, groundLayer, QueryTriggerInteraction.Ignore))
+            {
+                worldPos.y = hit.point.y + zoneHeight;
+            }
+            else
+            {
+                worldPos.y = seedSpawnArea.transform.position.y + zoneHeight;
+                Debug.LogWarning($"[PlantingZoneManager] Raycast non ha colpito il terreno, uso fallback Y: {worldPos.y}");
+            }
+
+            // Verifica distanza dalle posizioni esistenti
+            if (existingPositions != null && existingPositions.Count > 0)
+            {
+                bool tooClose = false;
+                foreach (Vector3 existingPos in existingPositions)
+                {
+                    float distance = Vector3.Distance(worldPos, existingPos);
+                    if (distance < minZoneDistance)
+                    {
+                        tooClose = true;
+                        Debug.Log($"[PlantingZoneManager] Tentativo {attempts}: posizione {worldPos} troppo vicina a {existingPos} (distanza: {distance:F2}m < {minZoneDistance}m)");
+                        break;
+                    }
+                }
+
+                if (!tooClose)
+                {
+                    validPositionFound = true;
+                    Debug.Log($"[PlantingZoneManager] Posizione valida trovata dopo {attempts} tentativi: {worldPos}");
+                }
+            }
+            else
+            {
+                // Prima zona, nessun controllo di distanza necessario
+                validPositionFound = true;
+                Debug.Log($"[PlantingZoneManager] Prima zona, posizione generata: {worldPos}");
+            }
         }
-        else
+
+        if (!validPositionFound)
         {
-            worldPos.y = seedSpawnArea.transform.position.y + zoneHeight;
-            Debug.LogWarning($"[PlantingZoneManager] Raycast non ha colpito il terreno, uso fallback Y: {worldPos.y}");
+            Debug.LogWarning($"[PlantingZoneManager] Impossibile trovare posizione valida dopo {maxPositionAttempts} tentativi! Uso ultima posizione generata.");
         }
-        
-        Debug.Log($"[PlantingZoneManager] Posizione generata: {worldPos}");
         
         return worldPos;
     }

@@ -98,9 +98,9 @@ public class PlantingZone : MonoBehaviour, IInteractable
             planted = true;
             
             // Spawna il fiore AL CENTRO della planting zone con offset in altezza
-            // Usa transform.up e transform.rotation per allineare il fiore con la zona
-            Vector3 flowerPosition = transform.position + transform.up * flowerHeightOffset;
-            Quaternion flowerRotation = transform.rotation; // Allinea la rotazione del fiore con la zona
+            // Usa Vector3.up per avere sempre fiore dritto verticalmente
+            Vector3 flowerPosition = transform.position + Vector3.up * flowerHeightOffset;
+            Quaternion flowerRotation = Quaternion.identity; // Sempre dritto
             Debug.Log($"[PlantingZone] Spawn fiore al centro: {flowerPosition} (offset Y: {flowerHeightOffset})");
             
             // Verifica FlowerManager
