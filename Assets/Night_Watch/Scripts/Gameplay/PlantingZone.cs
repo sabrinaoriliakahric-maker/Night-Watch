@@ -34,10 +34,13 @@ public class PlantingZone : MonoBehaviour, IInteractable
     /// </summary>
     public void ActivateZoneVFX()
     {
+        // Prima disattiva eventuali VFX precedenti per evitare duplicati
+        DeactivateZoneVFX();
+        
         if (zoneIndicatorVFXPrefab != null && activeZoneVFX == null)
         {
             activeZoneVFX = Instantiate(zoneIndicatorVFXPrefab, transform.position, Quaternion.identity, transform);
-            Debug.Log("[PlantingZone] ✅ Zone indicator VFX attivato (fiamme)");
+            Debug.Log("[PlantingZone] Zone indicator VFX attivato (fiamme)");
         }
     }
 
@@ -46,11 +49,26 @@ public class PlantingZone : MonoBehaviour, IInteractable
     /// </summary>
     public void DeactivateZoneVFX()
     {
+        Debug.Log($"[PlantingZone] DeactivateZoneVFX chiamato per {name}, activeZoneVFX è null? {activeZoneVFX == null}");
+        
         if (activeZoneVFX != null)
         {
             Destroy(activeZoneVFX);
             activeZoneVFX = null;
-            Debug.Log("[PlantingZone] Zone indicator VFX disattivato");
+            Debug.Log("[PlantingZone] Zone indicator VFX distrutto");
+        }
+        else
+        {
+            // Debug: verifica se ci sono figli con ParticleSystem che non sono stati tracciati
+            foreach (Transform child in transform)
+            {
+                ParticleSystem ps = child.GetComponent<ParticleSystem>();
+                if (ps != null)
+                {
+                    Debug.Log($"[PlantingZone] Trovato ParticleSystem non tracciato come figlio: {child.name}, lo distruggo");
+                    Destroy(child.gameObject);
+                }
+            }
         }
     }
 
@@ -80,29 +98,31 @@ public class PlantingZone : MonoBehaviour, IInteractable
             planted = true;
             
             // Spawna il fiore AL CENTRO della planting zone con offset in altezza
-            Vector3 flowerPosition = transform.position + Vector3.up * flowerHeightOffset;
-            Debug.Log($"[PlantingZone] ✅ Spawn fiore al centro: {flowerPosition} (offset Y: {flowerHeightOffset})");
+            // Usa transform.up e transform.rotation per allineare il fiore con la zona
+            Vector3 flowerPosition = transform.position + transform.up * flowerHeightOffset;
+            Quaternion flowerRotation = transform.rotation; // Allinea la rotazione del fiore con la zona
+            Debug.Log($"[PlantingZone] Spawn fiore al centro: {flowerPosition} (offset Y: {flowerHeightOffset})");
             
             // Verifica FlowerManager
             if (FlowerManager.Instance != null)
             {
-                Debug.Log("[PlantingZone] ✅ FlowerManager.Instance non è null, chiamo SpawnFlower");
-                FlowerManager.Instance.SpawnFlower(flowerPosition);
+                Debug.Log("[PlantingZone] FlowerManager.Instance non è null, chiamo SpawnFlower");
+                FlowerManager.Instance.SpawnFlower(flowerPosition, flowerRotation);
             }
             else
             {
-                Debug.LogError("[PlantingZone] ❌ FlowerManager.Instance è NULL!");
+                Debug.LogError("[PlantingZone] FlowerManager.Instance è NULL!");
             }
             
             // Spawna effetto particellare se assegnato
             if (plantVFXPrefab != null)
             {
                 Instantiate(plantVFXPrefab, transform.position, Quaternion.identity);
-                Debug.Log("[PlantingZone] ✅ plantVFX spawnato");
+                Debug.Log("[PlantingZone] plantVFX spawnato");
             }
             else
             {
-                Debug.LogWarning("[PlantingZone] ⚠️ plantVFXPrefab NON assegnato!");
+                Debug.LogWarning("[PlantingZone] plantVFXPrefab NON assegnato!");
             }
             
             Debug.Log("Fiore piantato!");

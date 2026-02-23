@@ -23,6 +23,9 @@ public class PlantingZoneManager : MonoBehaviour
     // Lista delle zone attive
     private List<PlantingZone> activeZones = new List<PlantingZone>();
     
+    // Lista per tracciare i VFX di spawn istanziati (da distruggere poi)
+    private List<GameObject> spawnedVFXList = new List<GameObject>();
+    
     // Tutte le planting zone disponibili nella scena
     private PlantingZone[] allZones;
 
@@ -62,19 +65,22 @@ public class PlantingZoneManager : MonoBehaviour
             return;
 
         NightWatchPhase currentPhase = GameManager.Instance.dayNightCycle.CurrentPhase;
+        
+        // FIX: Aggiorna previousPhase PRIMA dei controlli per evitare doppie chiamate
+        // Salva la fase da elaborare
+        NightWatchPhase phaseToProcess = previousPhase;
+        previousPhase = currentPhase;
 
         // Se la fase è cambiata da Day a Night
-        if (previousPhase == NightWatchPhase.Day && currentPhase == NightWatchPhase.Night)
+        if (phaseToProcess == NightWatchPhase.Day && currentPhase == NightWatchPhase.Night)
         {
             OnNightStart();
         }
         // Se la fase è cambiata da Night a Day
-        else if (previousPhase == NightWatchPhase.Night && currentPhase == NightWatchPhase.Day)
+        else if (phaseToProcess == NightWatchPhase.Night && currentPhase == NightWatchPhase.Day)
         {
             OnDayStart();
         }
-
-        previousPhase = currentPhase;
     }
 
     /// <summary>
@@ -91,7 +97,14 @@ public class PlantingZoneManager : MonoBehaviour
     /// </summary>
     private void OnDayStart()
     {
-        Debug.Log("[PlantingZoneManager] Inizio GIORNO - disattivo zone");
+        Debug.Log($"[PlantingZoneManager] Inizio GIORNO - disattivo zone e rimuovo fiori (activeZones count: {activeZones.Count})");
+        
+        // Rimuovi tutti i fiori spawnati
+        if (FlowerManager.Instance != null)
+        {
+            FlowerManager.Instance.ClearAllFlowers();
+        }
+        
         DeactivateAllZones();
     }
 
@@ -108,12 +121,23 @@ public class PlantingZoneManager : MonoBehaviour
 
         Debug.Log($"[PlantingZoneManager] Attivazione zone - allZones: {allZones.Length}, numberOfZones: {numberOfZones}");
 
-        // Disattiva tutte prima
+        // Disattiva tutte prima e rimuovi i VFX per evitare duplicati
         foreach (var zone in allZones)
         {
+            zone.DeactivateZoneVFX(); // Rimuove i VFX vecchi
             zone.gameObject.SetActive(false);
         }
         activeZones.Clear();
+        
+        // Distruggi anche i VFX di spawn vecchi dalla lista
+        foreach (GameObject vfx in spawnedVFXList)
+        {
+            if (vfx != null)
+            {
+                Destroy(vfx);
+            }
+        }
+        spawnedVFXList.Clear();
 
         // Mescola l'ordine delle zone
         List<PlantingZone> shuffledZones = new List<PlantingZone>(allZones);
@@ -139,28 +163,26 @@ public class PlantingZoneManager : MonoBehaviour
             zone.transform.position = newPos;
             zone.gameObject.SetActive(true);
             
-            // 【NUOVO】Forza il sync dei transform per i physics PRIMA di abilitare il collider
-            // Questo è necessario per far sì che Unity aggiorni la physics world
+            // Forza il sync dei transform per i physics PRIMA di abilitare il collider
             Physics.SyncTransforms();
             
-            // 【FIX】Abilita esplicitamente il BoxCollider dopo SetActive
-            // Questo è necessario perché il collider potrebbe rimanere disabilitato
+            // Abilita esplicitamente il BoxCollider dopo SetActive
             BoxCollider col = zone.GetComponent<BoxCollider>();
             if (col != null)
             {
-                // 【NUOVO】Imposta dimensioni minime se troppo piccole
+                // Imposta dimensioni minime se troppo piccole
                 if (col.size.x < 0.1f || col.size.y < 0.1f || col.size.z < 0.1f)
                 {
                     col.size = new Vector3(2f, 2f, 2f);
-                    Debug.Log($"[PlantingZoneManager] ⚠️ BoxCollider troppo piccolo, ridimensionato a (2,2,2)");
+                    Debug.Log($"[PlantingZoneManager] BoxCollider troppo piccolo, ridimensionato a (2,2,2)");
                 }
                 
                 col.enabled = true;
-                Debug.Log($"[PlantingZoneManager] ✅ BoxCollider abilitato per {zone.name}, enabled={col.enabled}, isTrigger={col.isTrigger}, size={col.size}, layer={LayerMask.LayerToName(zone.gameObject.layer)}");
+                Debug.Log($"[PlantingZoneManager] BoxCollider abilitato per {zone.name}, enabled={col.enabled}, isTrigger={col.isTrigger}, size={col.size}, layer={LayerMask.LayerToName(zone.gameObject.layer)}");
             }
             else
             {
-                Debug.LogWarning($"[PlantingZoneManager] ⚠️ Nessun BoxCollider trovato su {zone.name}!");
+                Debug.LogWarning($"[PlantingZoneManager] Nessun BoxCollider trovato su {zone.name}!");
             }
             
             // Debug: verifica che il collider sia effettivamente rilevabile
@@ -178,10 +200,12 @@ public class PlantingZoneManager : MonoBehaviour
             
             Debug.Log($"[PlantingZoneManager] Attivata zona {i}: {zone.name} alla posizione {newPos}");
             
-            // Spawna effetto particellare se assegnato
+            // Spawna effetto particellare se assegnato e aggiungilo alla lista per потом distruggerlo
             if (spawnVFXPrefab != null)
             {
-                Instantiate(spawnVFXPrefab, newPos, Quaternion.identity);
+                GameObject vfx = Instantiate(spawnVFXPrefab, newPos, Quaternion.identity);
+                spawnedVFXList.Add(vfx);
+                Debug.Log($"[PlantingZoneManager] VFX di spawn aggiunto alla lista, totale: {spawnedVFXList.Count}");
             }
         }
 
@@ -193,17 +217,36 @@ public class PlantingZoneManager : MonoBehaviour
     /// </summary>
     public void DeactivateAllZones()
     {
+        Debug.Log($"[PlantingZoneManager] DeactivateAllZones chiamato - zone da disattivare: {activeZones.Count}");
+        
         foreach (var zone in activeZones)
         {
             if (zone != null)
             {
+                Debug.Log($"[PlantingZoneManager] Disattivo zona: {zone.name}");
+                
                 // Rimuovi il VFX delle fiamme prima di disattivare
                 zone.DeactivateZoneVFX();
                 zone.ResetZone();
                 zone.gameObject.SetActive(false);
+                
+                Debug.Log($"[PlantingZoneManager] Zona {zone.name} disattivata");
             }
         }
         activeZones.Clear();
+        
+        // Distruggi tutti i VFX di spawn tracciati
+        Debug.Log($"[PlantingZoneManager] Distruzione VFX di spawn - count: {spawnedVFXList.Count}");
+        foreach (GameObject vfx in spawnedVFXList)
+        {
+            if (vfx != null)
+            {
+                Destroy(vfx);
+            }
+        }
+        spawnedVFXList.Clear();
+        
+        Debug.Log("[PlantingZoneManager] Tutte le zone disattivate");
     }
 
     /// <summary>

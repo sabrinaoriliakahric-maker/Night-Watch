@@ -5,6 +5,8 @@ TagManager:
   serializedVersion: 3
   tags:
   - Seed
+  - Flower
+  - PlantingZone
   layers:
   - Default
   - TransparentFX
